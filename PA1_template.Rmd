@@ -7,19 +7,174 @@ output:
 
 
 ## Loading and preprocessing the data
+```{r, echo=TRUE} 
+unzip("activity.zip")
+initialData <- read.csv("activity.csv", colClasses=c("numeric", "Date", "numeric"))
+```
 
+```{r, echo=TRUE} 
+head(initialData)
+str(initialData)
+```
 
 
 ## What is mean total number of steps taken per day?
+``{r, echo=TRUE}
+data <- initialData[!(is.na(initialData$steps)), ]
+```
 
+Calculate total no of steps:
 
+```{r, echo=TRUE}
+totalStepsDay <- aggregate(steps ~ date, data, sum)
+head(totalStepsDay)
+```
+
+Creating plots
+
+```{r, echo=TRUE}
+paletteBlue <- colorRampPalette(c("skyblue", "darkblue", "skyblue"))
+hist(totalStepsDay$steps, breaks=20, xlab="Number of Steps Taken", 
+     main="Histogram of the Total Number of Steps Taken per Day",
+     col=paletteBlue(22), family="serif")
+```
+
+```{r, message=FALSE}
+library(dplyr)
+totalStepsSummary <- summarise(totalStepsDay, meanOfTotalSteps=mean(totalStepsDay$steps),
+                               medianOfTotalSteps=median(totalStepsDay$steps))
+print(totalStepsSummary)
+```
+
+mean value calculated is **10766.19**, and the median value **10765**.
 
 ## What is the average daily activity pattern?
 
+```{r, echo=TRUE}
+meanStepsInterval <- aggregate(steps ~ interval, data, mean)
+head(meanStepsInterval)
+```
 
+
+```{r, echo=TRUE}
+plot(x=meanStepsInterval$interval, y=meanStepsInterval$steps, type="l",
+     main="Time Series Plot of Average Steps Taken per Interval",
+     ylab="Number of Steps", xlab="Intervals (in 5 mins)",
+     col="darkblue", lwd=1.5, family="serif")
+```
+
+
+```{r, echo=TRUE}
+meanStepsInterval[grep(max(meanStepsInterval$steps), meanStepsInterval$steps), ]
+```
+interval with the maximum number of steps is interval **835**.
 
 ## Imputing missing values
+```{r, echo=TRUE}
+anyNA(initialData)
+```
+
+```{r, echo=TRUE}
+data.frame(steps=sum(is.na(initialData$steps)), 
+           interval=sum(is.na(initialData$interval)), 
+           date=sum(is.na(initialData$date)))
+```
+
+```{r, echo=TRUE}
+imputedData <- initialData
+for(x in 1:17568) {
+    if(is.na(imputedData[x, 1])==TRUE) {
+        imputedData[x, 1] <- meanStepsInterval[meanStepsInterval$interval %in% imputedData[x, 3], 2]
+    }
+}
+head(imputedData)
+```
+
+```{r, echo=TRUE}
+imputedTotalStepsDay <- aggregate(steps ~ date, imputedData, sum)
+head(imputedTotalStepsDay)
+```
+
+Creating the histogram:
+
+```{r, echo=TRUE}
+paletteRed <- colorRampPalette(c("deeppink", "darkred", "deeppink"))
+hist(imputedTotalStepsDay$steps, breaks=20, xlab="Number of Steps Taken", 
+     main="Histogram of Total Number of Steps Taken per Day (With Imputed Values)",
+     col=paletteRed(22), family="serif")
+```
+
+```{r, echo=TRUE}
+imputedStepsSummary <- summarise(imputedTotalStepsDay, 
+                                 meanOfTotalSteps=mean(imputedTotalStepsDay$steps), 
+                                 medianOfTotalSteps=median(imputedTotalStepsDay$steps))  
+print(imputedStepsSummary)
+```
+
+```{r, echo=TRUE}
+rbind(totalStepsSummary, imputedTotalStepsSummary)
+```
+
+If histograms of the two data sets (imputed and non-imputed) are compared:
+
+```{r, echo=TRUE}
+par(mfrow = c(1, 2))
+hist(totalStepsDay$steps, breaks=20, xlab="Number of Steps Taken", 
+     col=paletteBlue(22), family="serif", ylim=c(0, 20), main=NULL)
+hist(imputedTotalStepsDay$steps, breaks=20, xlab="Number of Steps Taken", 
+     col=paletteRed(22), family="serif", ylim=c(0, 20), main=NULL)
+mtext("Histograms of Total Number of Steps Taken per Day, Without/With Imputed Values",
+      adj=0.95, family="serif", font=2)
+```
+
+```{r, echo=TRUE}
+naByDate <- initialData[is.na(initialData$steps), ]
+table(naByDate$date)
+```
+
+```{r, echo=TRUE}
+length(unique(data$interval))
+```
 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r, echo=TRUE}
+daysData <- imputedData
+daysData$days <- weekdays(daysData$date)
+daysData$weekday <- as.character(rep(0, times=17568))
+for(x in 1:17568) {
+    if(daysData[x, 4] %in% c("Saturday", "Sunday")) {
+        daysData[x, 5] <- "weekend"
+    } else {
+        daysData[x, 5] <- "weekday"
+    }
+}
+daysData$weekday <- factor(daysData$weekday)
+head(daysData)
+```
+
+To compare the weekday and weekend data, and create two plots of the average number of steps taken per interval, the data has to be split into two groups of weekday/weekend data, using the newly created variable.
+
+```{r, echo=TRUE}
+weekdayData <- daysData[daysData$weekday=="weekday", ]
+weekendData <- daysData[daysData$weekday=="weekend", ]
+```
+
+```{r, echo=TRUE}
+weekdayMean <- aggregate(steps ~ interval, weekdayData, mean)
+weekendMean <- aggregate(steps ~ interval, weekendData, mean)
+```
+
+plot:
+```{r, echo=TRUE}
+par(mfrow=c(2, 1), mar=c(4, 4.1, 3, 2.1))
+plot(weekdayMean$interval, weekdayMean$steps, type="l",
+     main="Time Series Plot of Average Steps Taken per Interval, for Weekdays",
+     xlab="Intervals (in 5 mins)", ylab="Number of Steps", family="serif",
+     col="darkred", lwd=1.5, ylim=c(0, 230))
+plot(weekendMean$interval, weekendMean$steps, type="l",
+     main="Time Series Plot of Average Steps Taken per Interval, for Weekends",
+     xlab="Intervals (in 5 mins)", ylab="Number of Steps", family="serif",
+     col="darkblue", lwd=1.5, ylim=c(0, 230))
+```
